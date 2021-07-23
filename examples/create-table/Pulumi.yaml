@@ -1,0 +1,5 @@
+name: create-table
+runtime:
+  name: python
+  options:
+    virtualenv: venv

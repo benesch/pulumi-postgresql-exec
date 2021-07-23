@@ -1,0 +1,2 @@
+pulumi==3.8.0
+-e ../../sdk/python/
