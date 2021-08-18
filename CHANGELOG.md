@@ -5,6 +5,12 @@ All notable changes to this crate will be documented in this file.
 The format is based on [Keep a Changelog], and this crate adheres to [Semantic
 Versioning].
 
+## 0.1.4 - 2021-08-17
+
+* Lazily connect to the PostgreSQL database the first time a resource managed
+  by the provider is created or destroyed. This makes it possible to run
+  `pulumi preview` when the database connection is not available.
+
 ## 0.1.3 - 2021-07-06
 
 * Correct version format in package URL.

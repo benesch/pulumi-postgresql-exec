@@ -43,8 +43,9 @@ func main() {
 }
 
 type postgresqlExecProvider struct {
-	host *provider.HostClient
-	conn *pgconn.PgConn
+	host      *provider.HostClient
+	connStr   string
+	connCache *pgconn.PgConn
 }
 
 func (p *postgresqlExecProvider) CheckConfig(ctx context.Context, req *rpc.CheckRequest) (*rpc.CheckResponse, error) {
@@ -63,32 +64,27 @@ func (p *postgresqlExecProvider) Configure(ctx context.Context, req *rpc.Configu
 	user := vars["postgresql-exec:config:user"]
 	password := vars["postgresql-exec:config:password"]
 
-	connStr := "postgresql://"
+	p.connStr = "postgresql://"
 	if len(user) > 0 {
-		connStr += url.PathEscape(user)
+		p.connStr += url.PathEscape(user)
 		if len(password) > 0 {
-			connStr += ":"
-			connStr += url.PathEscape(password)
+			p.connStr += ":"
+			p.connStr += url.PathEscape(password)
 		}
-		connStr += "@"
+		p.connStr += "@"
 	}
 	if len(host) > 0 {
-		connStr += url.PathEscape(host)
+		p.connStr += url.PathEscape(host)
 	}
 	if len(port) > 0 {
-		connStr += ":"
-		connStr += url.PathEscape(port)
+		p.connStr += ":"
+		p.connStr += url.PathEscape(port)
 	}
 	if len(database) > 0 {
-		connStr += "/"
-		connStr += url.PathEscape(database)
+		p.connStr += "/"
+		p.connStr += url.PathEscape(database)
 	}
 
-	conn, err := pgconn.Connect(ctx, connStr)
-	if err != nil {
-		return nil, err
-	}
-	p.conn = conn
 	return &rpc.ConfigureResponse{}, nil
 }
 
@@ -155,7 +151,11 @@ func (p *postgresqlExecProvider) Create(ctx context.Context, req *rpc.CreateRequ
 	if err != nil {
 		return nil, err
 	}
-	_, err = p.conn.Exec(ctx, inputs["createSql"].StringValue()).ReadAll()
+	conn, err := p.conn(ctx)
+	if err != nil {
+		return nil, err
+	}
+	_, err = conn.Exec(ctx, inputs["createSql"].StringValue()).ReadAll()
 	if err != nil {
 		return nil, err
 	}
@@ -202,7 +202,11 @@ func (p *postgresqlExecProvider) Delete(ctx context.Context, req *rpc.DeleteRequ
 	if err != nil {
 		return nil, err
 	}
-	_, err = p.conn.Exec(ctx, inputs["destroySql"].StringValue()).ReadAll()
+	conn, err := p.conn(ctx)
+	if err != nil {
+		return nil, err
+	}
+	_, err = conn.Exec(ctx, inputs["destroySql"].StringValue()).ReadAll()
 	if err != nil {
 		return nil, err
 	}
@@ -225,4 +229,15 @@ func (p *postgresqlExecProvider) GetSchema(ctx context.Context, req *rpc.GetSche
 
 func (p *postgresqlExecProvider) Cancel(context.Context, *pbempty.Empty) (*pbempty.Empty, error) {
 	return &pbempty.Empty{}, nil
+}
+
+func (p *postgresqlExecProvider) conn(ctx context.Context) (*pgconn.PgConn, error) {
+	if p.connCache == nil {
+		conn, err := pgconn.Connect(ctx, p.connStr)
+		if err != nil {
+			return nil, err
+		}
+		p.connCache = conn
+	}
+	return p.connCache, nil
 }
